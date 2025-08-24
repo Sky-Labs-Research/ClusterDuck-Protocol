@@ -49,8 +49,9 @@ void setup()
     return;
   }
 
-  timer.every(INTERVAL_MS, runSensor); // Triggers runSensor every INTERVAL_MS
+  // timer.every(INTERVAL_MS, runSensor); // Triggers runSensor every INTERVAL_MS
 
+  // TODO: Implement serial / tcp / udp mavlink connection
   setupOK = true;
   Serial.println("[MAMA] Setup OK!");
 }
@@ -124,4 +125,73 @@ bool sendData(std::string message, byte topic)
     Serial.println(("[Link] Failed to send data. error = " + std::to_string(err)).c_str());
   }
   return sentOk;
+}
+
+#include <cstdint>
+
+// --- Our Mavlink Fragmentation Packet Structure ---
+
+// maximum payload size per fragment
+constexpr size_t MAX_PACKET_SIZE = 229;
+constexpr size_t FRAGMENT_HEADER_SIZE = sizeof(uint16_t) + sizeof(uint8_t) + sizeof(uint8_t) + sizeof(uint8_t); // 2 + 1 + 1 + 1 = 5 bytes
+constexpr size_t MAX_PAYLOAD_PER_FRAGMENT = MAX_PACKET_SIZE - FRAGMENT_HEADER_SIZE;                             // 229 - 5 = 224 bytes
+
+#pragma pack(push, 1) // remove padding
+struct MavlinkFragmentPacket
+{
+  uint16_t message_id;                    // ID for the original MAVLink message
+  uint8_t total_fragments;                // Total fragments for this message
+  uint8_t fragment_sequence;              // This fragment's number (0-indexed)
+  uint8_t payload_length;                 // Length of the data in this fragment
+  uint8_t data[MAX_PAYLOAD_PER_FRAGMENT]; // The actual data chunk
+};
+#pragma pack(pop)
+
+#include <cmath>
+#include <cstring>
+
+// Global variable to ensure unique message IDs
+static uint16_t current_message_id = 0;
+
+/**
+ * @brief Splits a mavlink_message_t and sends it in fragments.
+ * @param msg The MAVLink message to send.
+ */
+void splitAndSendMavlinkMessage(const mavlink_message_t &msg)
+{
+  // Serialize the MAVLink message into a byte buffer
+  uint8_t send_buffer[MAVLINK_MAX_PACKET_LEN];
+  uint16_t len = mavlink_msg_to_send_buffer(send_buffer, &msg);
+
+  // Calculate the number of fragments needed
+  uint8_t total_fragments = static_cast<uint8_t>(ceil((float)len / MAX_PAYLOAD_PER_FRAGMENT));
+
+  // Create and send each fragment
+  uint16_t message_id = current_message_id++;
+  for (uint8_t i = 0; i < total_fragments; ++i)
+  {
+    MavlinkFragmentPacket packet;
+    packet.message_id = message_id;
+    packet.total_fragments = total_fragments;
+    packet.fragment_sequence = i;
+
+    // Calculate the starting point and size of the data chunk
+    size_t offset = i * MAX_PAYLOAD_PER_FRAGMENT;
+    size_t chunk_size = (i == total_fragments - 1) ? (len - offset) : MAX_PAYLOAD_PER_FRAGMENT;
+
+    packet.payload_length = chunk_size;
+    memcpy(packet.data, &send_buffer[offset], chunk_size);
+
+    // --- SEND THE PACKET ---
+    // udp.write(reinterpret_cast<const uint8_t*>(&packet), FRAGMENT_HEADER_SIZE + packet.payload_length);
+    bool sent = sendData((char *)(&packet), reservedTopic::mavlink);
+    if (sent)
+    {
+      Serial.println("Sent fragment " + String(i + 1) + "/" + String(total_fragments));
+    }
+    else
+    {
+      Serial.println("Failed to send fragment " + String(i + 1) + "/" + String(total_fragments));
+    }
+  }
 }
