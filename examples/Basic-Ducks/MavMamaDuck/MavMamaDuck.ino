@@ -14,6 +14,7 @@
 #include <CDP.h>
 #include <checksum.h>
 #include <common/mavlink.h>
+#include "DuckMav.h"
 
 #ifdef SERIAL_PORT_USBVIRTUAL
 #define Serial SERIAL_PORT_USBVIRTUAL
@@ -29,6 +30,7 @@ auto timer = timer_create_default(); // Creating a timer with default settings
 const int INTERVAL_MS = 10000;       // Interval in milliseconds between runSensor call
 int counter = 1;                     // Counter for the sensor data
 bool setupOK = false;                // Flag to check if setup is complete
+MavlinkHandler mavlinkHandler;
 
 /**
  * @brief Setup function to initialize the MamaDuck
@@ -52,6 +54,19 @@ void setup()
   // timer.every(INTERVAL_MS, runSensor); // Triggers runSensor every INTERVAL_MS
 
   // TODO: Implement serial / tcp / udp mavlink connection
+
+  // Initialize MAVLink interfaces.
+  // Use `Serial` for the console, and `Serial2` for MAVLink
+  mavlinkHandler.beginSerial(&Serial2, 57600);
+  Serial2.write("This is MAVLink serial bitches! We are live ;)");
+
+  // Example TCP server: MAVProxy is often on 14550
+  // Example: TCP client to MAVProxy
+  mavlinkHandler.beginTcp(duck.getDuckIPAddress().toString().c_str(), 14550);
+
+  // Example UDP: local port 14550, sending to a GCS on 14550
+  // mavlinkHandler.beginUdp(14550, "192.168.1.101", 14550);
+
   setupOK = true;
   Serial.println("[MAMA] Setup OK!");
 }
@@ -70,6 +85,7 @@ void loop()
   timer.tick();
 
   duck.run();
+  mavlinkHandler.handleMavlink();
 }
 
 /**

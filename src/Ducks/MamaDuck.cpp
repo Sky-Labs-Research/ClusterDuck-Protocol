@@ -321,7 +321,7 @@ void MamaDuck::processIncomingFragment(const MavlinkFragmentPacket *incoming_pac
   // Check if the message is complete
   if (buffer.fragments_received_count == buffer.total_fragments)
   {
-    Serial.println("🎉 Message " + String(msg_id) + " is complete! Rebuilding...");
+    Serial.println("Message " + String(msg_id) + " is complete! Rebuilding...");
 
     // Concatenate all fragments into a single buffer
     std::vector<uint8_t> full_message_buffer;
@@ -344,6 +344,9 @@ void MamaDuck::processIncomingFragment(const MavlinkFragmentPacket *incoming_pac
         // For example, print its ID
         // handleReassembledMessage(reassembled_msg);
         // TODO: FORWARD TO ENDPOINT
+        // Incoming duck to outgoing mavlink
+        // Send to TCP UDP Serial and Relay to Ducks
+        // send tcp serial from DuckMav.cpp
       }
     }
 

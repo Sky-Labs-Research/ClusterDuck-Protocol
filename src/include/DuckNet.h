@@ -48,7 +48,6 @@
 #include "cdpHome.h"
 #include "papaHome.h"
 
-
 #endif
 
 #define AP_SCAN_INTERVAL_MS 10
@@ -58,76 +57,95 @@
  *
  * Provides access to Webserver, DNS, and WiFi update functionalities.
  */
-class DuckNet {
+class DuckNet
+{
 public:
-
   int channel;
   std::string duckSession;
 
 #ifdef CDPCFG_WIFI_NONE
-  int setupWebServer(bool createCaptivePortal = false, std::string html = "") {
+  int setupWebServer(bool createCaptivePortal = false, std::string html = "")
+  {
     logwarn_ln("WARNING setupWebServer skipped, device has no WiFi.");
     return DUCK_ERR_NONE;
   }
 
-  int setupWifiAp(const char* accessPoint = "DuckLink") {
+  int setupWifiAp(const char *accessPoint = "DuckLink")
+  {
     logwarn_ln("WARNING setupWifiAp skipped, device has no WiFi.");
     return DUCK_ERR_NONE;
   }
 
-  int setupDns() {
+  int setupDns()
+  {
     logwarn_ln("WARNING setupDns skipped, device has no WiFi.");
     return DUCK_ERR_NONE;
   }
 
-  int setupInternet(std::string ssid, std::string password) {
+  int setupInternet(std::string ssid, std::string password)
+  {
     logwarn_ln("WARNING setupInternet skipped, device has no WiFi.");
     return DUCK_ERR_NONE;
   }
 
-  void setSsid(std::string val) {
+  void setSsid(std::string val)
+  {
     logwarn_ln("WARNING setSsid skipped, device has no WiFi.");
   }
 
-  void setPassword(std::string val) {
+  void setPassword(std::string val)
+  {
     logwarn_ln("WARNING setPassword skipped, device has no WiFi.");
   }
 
-  std::string getSsid() {
+  std::string getSsid()
+  {
     logwarn_ln("WARNING getSsid skipped, device has no WiFi.");
     return std::string("");
   }
 
-  std::string getPassword() {
+  std::string getPassword()
+  {
     logwarn_ln("WARNING getPassword skipped, device has no WiFi.");
     return std::string("");
   }
 
-  void setDeviceId(std::vector<byte> deviceId) {
+  void setDeviceId(std::vector<byte> deviceId)
+  {
     logwarn_ln("WARNING setDeviceId skipped, device has no WiFi.");
   }
 
-  bool isWifiConnected() {
+  bool isWifiConnected()
+  {
     logwarn_ln("WARNING isWifiConnected skipped, device has no WiFi.");
     return false;
   }
 
-  int loadWiFiCredentials() {
+  int loadWiFiCredentials()
+  {
     logwarn_ln("WARNING loadWiFiCredentials skipped, device has no WiFi.");
     return DUCK_ERR_NONE;
   }
 
-  void saveChannel(int val) {
+  void saveChannel(int val)
+  {
     logwarn_ln("WARNING saveChannel skipped, device has no WiFi.");
   }
 
-  int getChannel() {
+  int getChannel()
+  {
     logwarn_ln("WARNING getChannel skipped, device has no WiFi.");
     return 0;
   }
 
-  void loadChannel() {
+  void loadChannel()
+  {
     logwarn_ln("WARNING loadChannel skipped, device has no WiFi.");
+  }
+
+  void getIPAddress()
+  {
+    logwarn_ln("WARNING getIPAddress skipped, device has no WiFi.");
   }
 
 #else
@@ -152,7 +170,7 @@ public:
    *
    * @returns DUCK_ERR_NONE if successful, an error code otherwise.
    */
-  int setupWifiAp(const char* accessPoint = "DuckLink");
+  int setupWifiAp(const char *accessPoint = "DuckLink");
 
   /**
    * @brief Set up DNS.
@@ -227,16 +245,23 @@ public:
   /**
    * @brief Get the current channel.
    *
-   * @returns an int representing the current channel
+   * @returns an IPAddress representing the current channel
    */
-  int getChannel();
+  IPAddress getChannel();
+
+  /**
+   * @brief Get the ducks current IP Address.
+   *
+   * @returns an IPAddress representing current IP Address
+   */
+  IPAddress getIPAddress();
 
   /**
    * @brief Set the Duck's device id.
    *
    * @param deviceId Duck's device ID string to set
    */
-  void setDeviceId(std::array<byte,8> deviceId);
+  void setDeviceId(std::array<byte, 8> deviceId);
 
   /**
    * @brief Provide Wifi connection status.
@@ -251,21 +276,20 @@ public:
   DuckNet(BloomFilter *bloomFilter);
 
 private:
+  DuckNet(DuckNet const &) = delete;
+  DuckNet &operator=(DuckNet const &) = delete;
 
-  DuckNet(DuckNet const&) = delete;
-  DuckNet& operator=(DuckNet const&) = delete;
+  DuckRadio &duckRadio = DuckRadio::getInstance();
 
-  DuckRadio& duckRadio = DuckRadio::getInstance();
+  DuckPacket *txPacket = NULL;
 
-  DuckPacket* txPacket = NULL;
-
-  std::array<byte,8> deviceId;
+  std::array<byte, 8> deviceId;
 
   BloomFilter *bloomFilter = nullptr;
 
   static const byte DNS_PORT;
-  static const char* DNS;
-  static const char* AP;
+  static const char *DNS;
+  static const char *AP;
   std::string portal = "";
   std::string ssid = "";
   std::string password = "";

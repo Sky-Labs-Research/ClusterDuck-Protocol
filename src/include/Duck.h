@@ -16,14 +16,15 @@ class Duck;
 #include "DuckTypes.h"
 #include "DuckUtils.h"
 
-class Duck {
+class Duck
+{
 
 public:
   /**
    * @brief Construct a new Duck object.
    *
    */
-  Duck(std::string name="");
+  Duck(std::string name = "");
 
   virtual ~Duck();
 
@@ -31,18 +32,18 @@ public:
 
   /**
    * @brief setup the duck unique ID
-   * 
+   *
    * @param an 8 byte array
-   * @return DUCK_ERR_NONE if successful, an error code otherwise 
+   * @return DUCK_ERR_NONE if successful, an error code otherwise
    */
-  int setDeviceId(std::array<byte,8>& id);
+  int setDeviceId(std::array<byte, 8> &id);
 
   /**
    * @brief Get the duck's unique ID.
-   * 
+   *
    * @returns A std::string representing the duck's unique ID
-   */ 
-  std::string getDuckId() {return std::string(duid.begin(), duid.end());}
+   */
+  std::string getDuckId() { return std::string(duid.begin(), duid.end()); }
 
   /**
    * @brief setup the duck unique ID
@@ -50,16 +51,16 @@ public:
    * @param an 8 byte unique id
    * @return DUCK_ERR_NONE if successful, an error code otherwise
    */
-  int setDeviceId(std::string& id);
+  int setDeviceId(std::string &id);
 
-    /**
-     * @brief setup the duck unique ID
-     *
-     * @param an 8 byte unique id
-     * @return DUCK_ERR_NONE if successful, an error code otherwise
-     */
+  /**
+   * @brief setup the duck unique ID
+   *
+   * @param an 8 byte unique id
+   * @return DUCK_ERR_NONE if successful, an error code otherwise
+   */
   [[deprecated("use setDeviceId(std::array<byte,8>& id) instead")]]
-  int setDeviceId(byte* id);
+  int setDeviceId(byte *id);
   /**
    * @brief Setup serial connection.
    *
@@ -78,24 +79,24 @@ public:
    * @param txPower   transmit power (default: CDPCFG_RF_LORA_TXPOW)
    */
   int setupRadio(float band = CDPCFG_RF_LORA_FREQ, int ss = CDPCFG_PIN_LORA_CS,
-                  int rst = CDPCFG_PIN_LORA_RST, int di0 = CDPCFG_PIN_LORA_DIO0,
-                  int di1 = CDPCFG_PIN_LORA_DIO1,
-                  int txPower = CDPCFG_RF_LORA_TXPOW,
-                  float bw = CDPCFG_RF_LORA_BW,
-                  uint8_t sf = CDPCFG_RF_LORA_SF,
-                  uint8_t gain = CDPCFG_RF_LORA_GAIN);
+                 int rst = CDPCFG_PIN_LORA_RST, int di0 = CDPCFG_PIN_LORA_DIO0,
+                 int di1 = CDPCFG_PIN_LORA_DIO1,
+                 int txPower = CDPCFG_RF_LORA_TXPOW,
+                 float bw = CDPCFG_RF_LORA_BW,
+                 uint8_t sf = CDPCFG_RF_LORA_SF,
+                 uint8_t gain = CDPCFG_RF_LORA_GAIN);
 
   /**
    * @brief Set sync word used to communicate between radios. 0x12 for private and 0x34 for public channels.
-   * 
+   *
    * @param syncWord set byte syncWord
    */
   void setSyncWord(byte syncWord);
 
   /**
    * @brief Set radio channel to transmit and receive on.
-   * 
-   * @param channelNum set radio channel 1-5 
+   *
+   * @param channelNum set radio channel 1-5
    */
   void setChannel(int channelNum);
 
@@ -107,7 +108,7 @@ public:
    *
    * @returns DUCK_ERROR_NONE if successful, an error code otherwise.
    */
-  int setupWifi(const char* ap = "🆘 DUCK EMERGENCY PORTAL");
+  int setupWifi(const char *ap = "🆘 DUCK EMERGENCY PORTAL");
 
   /**
    * @brief Setup DNS.
@@ -145,10 +146,10 @@ public:
    * @param data a string representing the data
    * @param targetDevice the device UID to receive the message (default is no target device)
    * @param outgoingMuid Output parameter that returns the MUID of the sent packet. NULL is ignored.
-   * @return DUCK_ERR_NONE if the data was send successfully, an error code otherwise. 
+   * @return DUCK_ERR_NONE if the data was send successfully, an error code otherwise.
    */
   int sendData(byte topic, const std::string data,
-    const std::array<byte,8> targetDevice = ZERO_DUID, std::array<byte,8> * outgoingMuid = NULL);
+               const std::array<byte, 8> targetDevice = ZERO_DUID, std::array<byte, 8> *outgoingMuid = NULL);
 
   /**
    * @brief Sends data into the mesh network.
@@ -160,9 +161,9 @@ public:
    * @return DUCK_ERR_NONE if the data was send successfully, an error code
    otherwise.
    */
-  int sendData(byte topic, std::vector<byte>& bytes,
-    const std::array<byte,8> targetDevice = ZERO_DUID, std::array<byte,8> * outgoingMuid = NULL);
-    
+  int sendData(byte topic, std::vector<byte> &bytes,
+               const std::array<byte, 8> targetDevice = ZERO_DUID, std::array<byte, 8> *outgoingMuid = NULL);
+
   /**
    * @brief Sends data into the mesh network.
    *
@@ -174,8 +175,8 @@ public:
    * @return DUCK_ERR_NONE if the data was send successfully, an error code
    * otherwise.
    */
-  int sendData(byte topic, const byte* data, int length,
-    const std::array<byte,8> targetDevice = ZERO_DUID, std::array<byte,8> * outgoingMuid = NULL);
+  int sendData(byte topic, const byte *data, int length,
+               const std::array<byte, 8> targetDevice = ZERO_DUID, std::array<byte, 8> *outgoingMuid = NULL);
 
   /**
    * @brief Builds a CdpPacket with a specified muid.
@@ -188,121 +189,126 @@ public:
    * @return a new CdpPacket
    * */
   CdpPacket buildCdpPacket(byte topic, const std::vector<byte> data,
-    const std::array<byte,8> targetDevice, const std::array<byte,4> &muid);
+                           const std::array<byte, 8> targetDevice, const std::array<byte, 4> &muid);
 
   /**
    * @brief Check wifi connection status
-   * 
-   * @returns true if device wifi is connected, false otherwise. 
+   *
+   * @returns true if device wifi is connected, false otherwise.
    */
   bool isWifiConnected();
 
   /**
    * @brief Get the access point ssid
-   * 
+   *
    * @returns the wifi access point as a string
    */
   std::string getSsid();
   /**
    * @brief Get the wifi access point password.
-   * 
-   * @returns the wifi access point password as a string. 
+   *
+   * @returns the wifi access point password as a string.
    */
   std::string getPassword();
+  /**
+   * @brief Get the IP address assigned to the duck.
+   *
+   * @returns the IP address as a IPAddress.
+   */
+  IPAddress getDuckIPAddress();
 
   /**
    * @brief Get an error code description.
-   * 
+   *
    * @param error an error code
-   * @returns a string describing the error. 
+   * @returns a string describing the error.
    */
   std::string getErrorString(int error);
 
   /**
    * @brief Turn on or off encryption.
-   * 
+   *
    * @param state true for on, false for off
    */
   void setEncrypt(bool state);
 
   /**
    * @brief get encryption state.
-   * 
+   *
    * @return true for on, false for off
    */
   bool getEncrypt();
 
   /**
    * @brief Turn on or off decryption. Used with MamaDuck
-   * 
+   *
    * @param state true for on, false for off
    */
   void setDecrypt(bool state);
 
   /**
    * @brief get decryption state.
-   * 
+   *
    * @return true for on, false for off
    */
   bool getDecrypt();
 
   /**
    * @brief Set new AES key for encryption.
-   * 
+   *
    * @param newKEY byte array, must be 32 bytes
    */
   void setAESKey(uint8_t newKEY[32]);
 
   /**
    * @brief Set new AES initialization vector.
-   * 
+   *
    * @param newIV byte array, must be 16 bytes
    */
   void setAESIv(uint8_t newIV[16]);
 
   /**
    * @brief Encrypt data using AES-256 CTR.
-   * 
+   *
    * @param text pointer to byte array of plaintext
    * @param encryptedData pointer to byte array to store encrypted message
    * @param inc size of text to be encrypted
    */
-  void encrypt(uint8_t* text, uint8_t* encryptedData, size_t inc);
+  void encrypt(uint8_t *text, uint8_t *encryptedData, size_t inc);
 
   /**
    * @brief Decrypt data using AES-256 CTR.
-   * 
+   *
    * @param encryptedData pointer to byte array to be decrypted
    * @param text pointer to byte array to store decrypted plaintext
    * @param inc size of text to be decrypted
    */
-  void decrypt(uint8_t* encryptedData, uint8_t* text, size_t inc);
+  void decrypt(uint8_t *encryptedData, uint8_t *text, size_t inc);
 
 protected:
-  Duck(Duck const&) = delete;
-  Duck& operator=(Duck const&) = delete;
+  Duck(Duck const &) = delete;
+  Duck &operator=(Duck const &) = delete;
 
   std::string deviceId;
-  std::array<byte,8> duid;
+  std::array<byte, 8> duid;
 
-  DuckRadio& duckRadio = DuckRadio::getInstance();
+  DuckRadio &duckRadio = DuckRadio::getInstance();
 
+  DuckNet *const duckNet;
 
-  DuckNet * const duckNet;
-
-  DuckPacket* txPacket = NULL;
-  DuckPacket* rxPacket = NULL;
-  std::array<byte,4> lastMessageMuid;
+  DuckPacket *txPacket = NULL;
+  DuckPacket *rxPacket = NULL;
+  std::array<byte, 4> lastMessageMuid;
 
   BloomFilter filter;
 
   /**
    * @brief sends a pong message
-   * 
-   * @return DUCK_ERR_NONE if successfull. An error code otherwise 
+   *
+   * @return DUCK_ERR_NONE if successfull. An error code otherwise
    */
   int sendPong();
-  
+
   /**
    * @brief sends a ping message
    *
@@ -319,7 +325,7 @@ protected:
 
   /**
    * @brief Implement the duck's specific behavior.
-   * 
+   *
    * This method must be implemented by the Duck's concrete classes such as DuckLink, MamaDuck,...
    */
   virtual void run() = 0;
@@ -330,13 +336,16 @@ protected:
    * The default implementation simply initializes the serial interface.
    * It can be overriden by each concrete Duck class implementation.
    */
-  virtual int setupWithDefaults(std::array<byte,8> deviceId, std::string ssid, std::string password) {
+  virtual int setupWithDefaults(std::array<byte, 8> deviceId, std::string ssid, std::string password)
+  {
     int err = setupSerial();
-    if (err != DUCK_ERR_NONE) {
+    if (err != DUCK_ERR_NONE)
+    {
       return err;
     }
     err = setDeviceId(deviceId);
-    if (err != DUCK_ERR_NONE) {
+    if (err != DUCK_ERR_NONE)
+    {
       return err;
     }
     return DUCK_ERR_NONE;
@@ -344,19 +353,20 @@ protected:
 
   /**
    * @brief Get the duck type.
-   * 
+   *
    * @returns A value representing a DuckType
    */
   virtual int getType() = 0;
 
   /**
    * @brief reconnect the duck to the given wifi access point
-   * 
-   * @param ssid the access point ssid to connect to 
+   *
+   * @param ssid the access point ssid to connect to
    * @param password the access point password
-   * @return DUCK_ERR_NONE if the duck reconnected to the AP sucessfully. An error code otherwise. 
+   * @return DUCK_ERR_NONE if the duck reconnected to the AP sucessfully. An error code otherwise.
    */
-  virtual int reconnectWifi(std::string ssid, std::string password) {
+  virtual int reconnectWifi(std::string ssid, std::string password)
+  {
     return DUCK_ERR_NONE;
   }
 
@@ -371,8 +381,8 @@ protected:
    */
   static void logIfLowMemory();
 
-  static bool imAlive(void*);
-  static bool reboot(void*);
+  static bool imAlive(void *);
+  static bool reboot(void *);
 };
 
 #endif
