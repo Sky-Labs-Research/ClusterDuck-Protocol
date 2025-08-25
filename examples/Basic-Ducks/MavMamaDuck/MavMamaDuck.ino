@@ -15,6 +15,7 @@
 #include <checksum.h>
 #include <common/mavlink.h>
 #include "DuckMav.h"
+#include "cdpcfg.h"
 
 #ifdef SERIAL_PORT_USBVIRTUAL
 #define Serial SERIAL_PORT_USBVIRTUAL
@@ -42,7 +43,7 @@ MavlinkHandler mavlinkHandler;
 void setup()
 {
 
-  std::string deviceId("SLRMAMA1"); // MUST be 8 bytes and unique from other ducks
+  std::string deviceId("SLRMAMA2"); // MUST be 8 bytes and unique from other ducks
   std::array<byte, 8> devId;
   std::copy(deviceId.begin(), deviceId.end(), devId.begin());
   if (duck.setupWithDefaults(devId) != DUCK_ERR_NONE)
@@ -62,7 +63,9 @@ void setup()
 
   // Example TCP server: MAVProxy is often on 14550
   // Example: TCP client to MAVProxy
-  mavlinkHandler.beginTcp(duck.getDuckIPAddress().toString().c_str(), 14550);
+  Serial.print("Duck IP: ");
+  Serial.println(IPAddress(CDPCFG_AP_IP1, CDPCFG_AP_IP2, CDPCFG_AP_IP3, CDPCFG_AP_IP4).toString().c_str());
+  mavlinkHandler.beginTcp(IPAddress(CDPCFG_AP_IP1, CDPCFG_AP_IP2, CDPCFG_AP_IP3, CDPCFG_AP_IP4 + 1).toString().c_str(), 5760);
 
   // Example UDP: local port 14550, sending to a GCS on 14550
   // mavlinkHandler.beginUdp(14550, "192.168.1.101", 14550);
@@ -86,36 +89,6 @@ void loop()
 
   duck.run();
   mavlinkHandler.handleMavlink();
-}
-
-/**
- * @brief Periodically executed to gather and send health data.
- *
- * Collects the current counter value and available free memory, formats them
- * into a string, and transmits this data via CDP.
- *
- * @param unused Unused parameter required by the timer callback signature
- * @return true if data was successfully sent, false otherwise
- */
-bool runSensor(void *)
-{
-  bool result;
-
-  std::string message = "C:" + std::to_string(counter) + "|" + "FM:" + std::to_string(freeMemory());
-  Serial.print("[MAMA] sensor data: ");
-  Serial.println(message.c_str());
-
-  result = sendData(message, topics::health);
-  if (result)
-  {
-    counter++;
-    Serial.println("[MAMA] runSensor ok.");
-  }
-  else
-  {
-    Serial.println("[MAMA] runSensor failed.");
-  }
-  return result;
 }
 
 /**

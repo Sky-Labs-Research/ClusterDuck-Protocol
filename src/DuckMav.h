@@ -54,6 +54,8 @@ private:
     mavlink_message_t _receivedMessage;
 
     // Private helper functions
+    void connectToTCP();
+
     void readSerial();
     void readTcp();
     // void readUdp();

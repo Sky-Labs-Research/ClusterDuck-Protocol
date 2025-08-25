@@ -26,6 +26,26 @@ void MavlinkHandler::beginSerial(HardwareSerial *serial, long baudRate)
 #endif
 }
 
+void MavlinkHandler::connectToTCP()
+{
+    bool result;
+
+    Serial.println(_tcpEnabled);
+    Serial.println(!_tcpClient->connecting());
+    Serial.println(!_tcpClient->connected());
+    result = _tcpEnabled && (_tcpClient->connected() || _tcpClient->connecting() || _tcpClient->disconnecting());
+    if (result)
+    {
+        Serial.println("[MAMA] Connecting or Disconnecting to TCP Mavlink.");
+    }
+    else
+    {
+        Serial.println("[MAMA] Retrying connection to TCP Mavlink.");
+        _tcpClient->connect(_tcpHost, _tcpPort);
+    }
+    // return result;
+}
+
 void MavlinkHandler::beginTcp(const char *host, int port)
 {
     _tcpHost.fromString(host);
@@ -50,7 +70,8 @@ void MavlinkHandler::beginTcp(const char *host, int port)
     _tcpClient->onConnect([this](void *arg, AsyncClient *client)
                           { Serial.println("TCP MAVLink client connected!"); });
     _tcpClient->onDisconnect([this](void *arg, AsyncClient *client)
-                             { Serial.println("TCP MAVLink client disconnected!"); });
+                             { Serial.println("TCP MAVLink client disconnected!"); 
+                                connectToTCP(); });
     _tcpClient->connect(_tcpHost, _tcpPort);
     _tcpEnabled = true;
     Serial.println("TCP MAVLink client initialized.");
@@ -127,21 +148,6 @@ void MavlinkHandler::readSerial()
         }
     }
 }
-
-// void MavlinkHandler::readTcp()
-// {
-//     // This function is for processing the single byte from the async callback
-//     // A more robust implementation would buffer the data
-//     // For this example, let's assume we get one byte at a time
-//     uint8_t c = _tcpClient->read();
-//     if (mavlink_parse_char(MAVLINK_COMM_1, c, &_receivedMessage, &_mavlinkStatus))
-//     {
-//         // MAVLink message received! Process it here.
-//         Serial.print("Received MAVLink message from TCP, ID: ");
-//         Serial.println(_receivedMessage.msgid);
-//         sendMessage(&_receivedMessage);
-//     }
-// }
 
 // void MavlinkHandler::readUdp()
 // {
