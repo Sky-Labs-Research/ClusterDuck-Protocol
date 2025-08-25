@@ -1,4 +1,5 @@
 #include "DuckMav.h"
+#include <include/cdpcfg.h>
 
 MavlinkHandler::MavlinkHandler() : _serialEnabled(false),
                                    _tcpEnabled(false),

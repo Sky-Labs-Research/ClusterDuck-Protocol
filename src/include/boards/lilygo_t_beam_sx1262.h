@@ -20,8 +20,8 @@
 #define CDPCFG_GPS_TX 12
 
 // Mavlink Serial configuration
-#define CDPCFG_MAV_RX 15
-#define CDPCFG_MAV_TX 35
+#define CDPCFG_MAV_RX 4
+#define CDPCFG_MAV_TX 0
 
 // LoRa configuration
 #define CDPCFG_PIN_LORA_CS 18
