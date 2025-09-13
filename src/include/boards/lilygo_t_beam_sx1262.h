@@ -11,20 +11,24 @@
 #define CDP_BOARD_NAME "LilyGO T_Beam SX1262"
 #define CDPCFG_RADIO_SX1262
 
-#define CDPCFG_PIN_BAT 35 
-#define CDPCFG_BAT_MULDIV 200 / 100 
+#define CDPCFG_PIN_BAT 35
+#define CDPCFG_BAT_MULDIV 200 / 100
 #define CDPCFG_PIN_LED1 25
 
-//GPS configuration
+// GPS configuration
 #define CDPCFG_GPS_RX 34
 #define CDPCFG_GPS_TX 12
 
+// Mavlink Serial configuration
+#define CDPCFG_MAV_RX 4
+#define CDPCFG_MAV_TX 0
+
 // LoRa configuration
-#define CDPCFG_PIN_LORA_CS      18
-#define CDPCFG_PIN_LORA_RST     23
-#define CDPCFG_PIN_LORA_DIO0    26
-#define CDPCFG_PIN_LORA_DIO1    33
-#define CDPCFG_PIN_LORA_BUSY    32
+#define CDPCFG_PIN_LORA_CS 18
+#define CDPCFG_PIN_LORA_RST 23
+#define CDPCFG_PIN_LORA_DIO0 26
+#define CDPCFG_PIN_LORA_DIO1 33
+#define CDPCFG_PIN_LORA_BUSY 32
 
 // Oled Display settings
 #define CDPCFG_OLED_NONE

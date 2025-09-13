@@ -81,7 +81,8 @@ VAL:          228  bytes               - Value to set for command
  * @brief Defines preset topics for duck packets.
  *
  */
-enum topics {
+enum topics
+{
   /// generic message (e.g non emergency messages)
   status = 0x10,
   /// captive portal message
@@ -97,6 +98,8 @@ enum topics {
   // Send duck commands
   dcmd = 0x16,
   // MQ7 Gas Sensor
+  mavlink = 0x17,
+  // MAVLINK Data
   mq7 = 0xEF,
   // GP2Y Dust Sensor
   gp2y = 0xFA,
@@ -226,6 +229,8 @@ public:
       case topics::health:
         return "health";
       case topics::dcmd:
+      return "dcmd";
+    case topics::mavlink:
         return "dcmd";
       case topics::mq7:
         return "mq7";
