@@ -229,9 +229,9 @@ public:
       case topics::health:
         return "health";
       case topics::dcmd:
-      return "dcmd";
-    case topics::mavlink:
         return "dcmd";
+      case topics::mavlink:
+        return "mavlink";
       case topics::mq7:
         return "mq7";
       case topics::gp2y:
