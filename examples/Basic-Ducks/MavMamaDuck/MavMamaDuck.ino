@@ -1,10 +1,11 @@
 /**
  * @file MavMamaDuck.ino
- * @brief Implements a MamaDuck using the ClusterDuck Protocol (CDP) and Mavlink.
+ * @brief Implements a MamaDuck using the ClusterDuck Protocol (CDP) and Mavlink
+ * with robust, multi-threaded MAVLink forwarding.
  *
- * This example firmware periodically sends sensor health data (counter and free memory)
- * through a CDP mesh network. It also relays messages that it receives from other ducks
- * that has not seen yet.
+ * This firmware forwards MAVLink packets between Serial, TCP, and a LoRa-based
+ * CDP mesh network. It uses a multi-tasking architecture to handle high data rates
+ *  packet loss.
  *
  * @date 2025-07-17
  */
@@ -16,6 +17,11 @@
 #include <common/mavlink.h>
 #include "DuckMav.h"
 #include "cdpcfg.h"
+// added
+#include "MavlinkFragment.h"
+#include <cmath>
+#include <cstring>
+#include <stdlib.h>
 
 #ifdef SERIAL_PORT_USBVIRTUAL
 #define Serial SERIAL_PORT_USBVIRTUAL
@@ -24,6 +30,8 @@
 // --- Function Declarations ---
 bool sendData(std::string message, byte topic = topics::mavlink);
 bool runSensor(void *);
+void splitAndSendMavlinkMessage(const mavlink_message_t &msg);
+void drainLoRaQueueFromLoop();
 
 // --- Global Variables ---
 MamaDuck duck;                       // CDP MamaDuck instance
@@ -32,6 +40,8 @@ const int INTERVAL_MS = 10000;       // Interval in milliseconds between runSens
 int counter = 1;                     // Counter for the sensor data
 bool setupOK = false;                // Flag to check if setup is complete
 MavlinkHandler mavlinkHandler;
+QueueHandle_t loraTxQueue = NULL;
+static uint16_t current_message_id = 0;
 
 /**
  * @brief Setup function to initialize the MamaDuck
@@ -46,6 +56,7 @@ void setup()
   std::string deviceId("SLRMAMA2"); // MUST be 8 bytes and unique from other ducks
   std::array<byte, 8> devId;
   std::copy(deviceId.begin(), deviceId.end(), devId.begin());
+
   if (duck.setupWithDefaults(devId) != DUCK_ERR_NONE)
   {
     Serial.println("[MAMA] Failed to setup MamaDuck");
@@ -56,27 +67,37 @@ void setup()
 
   // TODO: Implement serial / tcp / udp mavlink connection
 
-  // Initialize MAVLink interfaces.
-  // Use `Serial` for the console, and `Serial2` for MAVLink
-  mavlinkHandler.beginSerial(&Serial2, 57600);
-  Serial2.write("This is MAVLink serial bitches! We are live ;)");
+  // Example 1: Serial link to a flight controller on Serial2.
+  // mavlinkHandler.beginSerial(&Serial2, 57600);
 
-  // Example TCP server: MAVProxy is often on 14550
-  // Example: TCP client to MAVProxy
-  Serial.print("Duck IP: ");
-  Serial.println(IPAddress(CDPCFG_AP_IP1, CDPCFG_AP_IP2, CDPCFG_AP_IP3, CDPCFG_AP_IP4).toString().c_str());
-
-  // TODO: Possibly make this dynamic for when devices join AP?
-  // Temp connect to the next ip device on the ducks access point
+  // Example 2: TCP client connecting to a GCS like MAVProxy.
+  // This connects to the first device (e.g., a laptop) that joins the Duck's access point.
   mavlinkHandler.beginTcpClient(IPAddress(CDPCFG_AP_IP1, CDPCFG_AP_IP2, CDPCFG_AP_IP3, CDPCFG_AP_IP4 + 1).toString().c_str(), 5760);
 
-  // mavlinkHandler.beginTcpServer(5761);
+  // Example 3: TCP server for a GCS to connect to this Duck.
+  // QGroundControl or MAVProxy can connect to this port.
+  mavlinkHandler.beginTcpServer(5761);
 
-  // Example UDP: local port 14550, sending to a GCS on 14550
-  // mavlinkHandler.beginUdp(14550, "192.168.1.101", 14550);
+  // After configuring interfaces, start the dedicated background parsing tasks.
+  // This moves all high-frequency MAVLink processing off the main loop().
+  mavlinkHandler.beginMavlinkTasks();
+
+  // --- LoRa TX Queue Setup ---
+  loraTxQueue = xQueueCreate(20, sizeof(MavlinkFragmentPacket *));
+  if (!loraTxQueue)
+  {
+    Serial.println("[MAMA] ERROR: failed to create loraTxQueue");
+  }
+  else
+  {
+    Serial.println("[MAMA] loraTxQueue created");
+  }
 
   setupOK = true;
-  Serial.println("[MAMA] Setup OK!");
+  Serial.println("[MAMA] Setup OK! MAVLink tasks are running in the background.");
+
+  Serial.printf("setup() running on core ");
+  Serial.println(xPortGetCoreID());
 }
 
 /**
@@ -92,48 +113,45 @@ void loop()
   }
   timer.tick();
 
+  // Run CDP state machine
   duck.run();
-  mavlinkHandler.handleMavlink();
+
+  // The main loop is now only responsible for draining the LoRa queue.
+  // All other MAVLink parsing is handled by dedicated FreeRTOS tasks for high performance.
+  drainLoRaQueueFromLoop();
+
+  // A small delay to yield CPU time, preventing this loop from starving other tasks.
+  vTaskDelay(pdMS_TO_TICKS(1));
 }
+
+// --- Data Sending Functions ---
 
 /**
  * @brief Sends the provided message as CDP packet to the mesh network.
- *
- * Encapsulates the message within a CDP topic and handles errors in transmission.
- *
- * @param message The payload data to send as a std::string
- * @param topic CDP topic. CDP topics can be found in CdpPacket.h (default: status)
- * @return true if data sent successfully, false otherwise
  */
 bool sendData(std::string message, byte topic)
 {
-  bool sentOk = false;
-
   int err = duck.sendData(topic, message);
-  if (err == DUCK_ERR_NONE)
+  if (err != DUCK_ERR_NONE)
   {
-    sentOk = true;
+    Serial.printf("[Link] Failed to send data. error = %d\n", err);
+    return false;
   }
-  if (!sentOk)
-  {
-    Serial.println(("[Link] Failed to send data. error = " + std::to_string(err)).c_str());
-  }
-  return sentOk;
+  return true;
 }
 
-#include "MavlinkFragment.h"
-#include <cmath>
-#include <cstring>
-
-// Global variable to ensure unique message IDs
-static uint16_t current_message_id = 0;
-
 /**
- * @brief Splits a mavlink_message_t and sends it in fragments.
- * @param msg The MAVLink message to send.
+ * @brief Splits a mavlink_message_t and queues it for LoRa transmission.
+ * This function is called from the MAVLink parsing tasks.
  */
 void splitAndSendMavlinkMessage(const mavlink_message_t &msg)
 {
+  if (!loraTxQueue)
+  {
+    // This might happen if a MAVLink message arrives before the queue is ready.
+    return;
+  }
+
   // Serialize the MAVLink message into a byte buffer
   uint8_t send_buffer[MAVLINK_MAX_PACKET_LEN];
   uint16_t len = mavlink_msg_to_send_buffer(send_buffer, &msg);
@@ -145,33 +163,64 @@ void splitAndSendMavlinkMessage(const mavlink_message_t &msg)
   uint16_t message_id = current_message_id++;
   for (uint8_t i = 0; i < total_fragments; ++i)
   {
-    MavlinkFragmentPacket packet;
-    packet.message_id = message_id;
-    packet.total_fragments = total_fragments;
-    packet.fragment_sequence = i;
+    MavlinkFragmentPacket *packetPtr = (MavlinkFragmentPacket *)malloc(sizeof(MavlinkFragmentPacket));
+    if (!packetPtr)
+    {
+      Serial.println("[LoRaTx] ERROR: malloc MavlinkFragmentPacket failed");
+      return; // Out of memory
+    }
 
-    // Calculate the starting point and size of the data chunk
+    memset(packetPtr, 0, sizeof(MavlinkFragmentPacket));
+
+    packetPtr->message_id = message_id;
+    packetPtr->total_fragments = total_fragments;
+    packetPtr->fragment_sequence = i;
+
     size_t offset = i * MAX_PAYLOAD_PER_FRAGMENT;
     size_t chunk_size = (i == total_fragments - 1) ? (len - offset) : MAX_PAYLOAD_PER_FRAGMENT;
 
-    packet.payload_length = chunk_size;
-    memcpy(packet.data, &send_buffer[offset], chunk_size);
+    packetPtr->payload_length = chunk_size;
+    memcpy(packetPtr->data, &send_buffer[offset], chunk_size);
 
-    // --- SEND THE PACKET ---
-    // Create a string that contains the exact size of the packet (header + payload).
-    // This is binary-safe and won't be truncated by null bytes.
-    size_t total_packet_size = MAVLINK_FRAGMENT_HEADER_SIZE + packet.payload_length;
-    std::string packet_as_string(reinterpret_cast<char *>(&packet), total_packet_size);
-
-    bool sent = sendData(packet_as_string, topics::mavlink);
-
-    if (sent)
+    if (xQueueSend(loraTxQueue, &packetPtr, pdMS_TO_TICKS(50)) != pdPASS)
     {
-      Serial.println("Sent fragment " + String(i + 1) + "/" + String(total_fragments));
+      Serial.printf("[LoRaTx] Queue full, dropping fragment %u/%u (msgid=%u)\n",
+                    packetPtr->fragment_sequence + 1, packetPtr->total_fragments, packetPtr->message_id);
+      free(packetPtr); // Free memory if queue is full
+    }
+  }
+}
+
+/**
+ * @brief Drains a few fragments from the LoRa queue each loop iteration.
+ */
+void drainLoRaQueueFromLoop()
+{
+  if (!loraTxQueue)
+    return;
+
+  const int MAX_PER_LOOP = 6; // How many fragments to send per loop iteration
+  int handled = 0;
+
+  MavlinkFragmentPacket *packetPtr = nullptr;
+  while (handled < MAX_PER_LOOP && xQueueReceive(loraTxQueue, &packetPtr, 0) == pdPASS)
+  {
+    if (!packetPtr)
+      continue;
+
+    size_t total_packet_size = MAVLINK_FRAGMENT_HEADER_SIZE + packetPtr->payload_length;
+    std::string packet_as_string(reinterpret_cast<char *>(packetPtr), total_packet_size);
+
+    if (sendData(packet_as_string, topics::mavlink))
+    {
+      Serial.printf("Sent fragment %u/%u (msgid=%u)\n", packetPtr->fragment_sequence + 1, packetPtr->total_fragments, packetPtr->message_id);
     }
     else
     {
-      Serial.println("Failed to send fragment " + String(i + 1) + "/" + String(total_fragments));
+      Serial.printf("Failed to send fragment %u/%u (msgid=%u)\n", packetPtr->fragment_sequence + 1, packetPtr->total_fragments, packetPtr->message_id);
     }
+
+    free(packetPtr);
+    handled++;
   }
 }

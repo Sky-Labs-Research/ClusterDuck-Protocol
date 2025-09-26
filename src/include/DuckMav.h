@@ -6,73 +6,90 @@
 #include <AsyncTCP.h>
 // #include <ESPAsyncUDP.h>
 #include <common/mavlink.h>
+#include <vector>
+#include <map>
+#include "freertos/ringbuf.h" // For efficient, thread-safe ring buffers
+#include "freertos/semphr.h"  // For mutexes
+
+// Forward declaration
+class MavlinkHandler;
+
+// Structure to hold context for each connected TCP server client
+struct ServerClientContext
+{
+    AsyncClient *client;
+    RingbufHandle_t rxBuffer;
+    TaskHandle_t taskHandle;
+    MavlinkHandler *handler; // Pointer back to the parent handler
+    bool active;             // Flag to signal task termination
+};
+
+// Enum to identify MAVLink interfaces for forwarding logic
+enum class MavlinkInterface
+{
+    NONE,
+    MAVSERIAL,
+    TCP_CLIENT,
+    TCP_SERVER,
+    LORA
+};
 
 class MavlinkHandler
 {
 public:
-    // Constructor
     MavlinkHandler();
+    ~MavlinkHandler();
 
-    // Initialization methods for each interface
+    // Initialization Methods
     void beginSerial(HardwareSerial *serial, long baudRate);
     void beginTcpClient(const char *host, int port);
     void beginTcpServer(int port);
-    // void beginUdp(int localPort, const char *remoteHost, int remotePort);
+    void beginMavlinkTasks(); // Starts the background parsing tasks
 
-    // Main loop for reading/writing
-    void handleMavlink();
-
-    // Methods to enable/disable interfaces
-    void enableSerial(bool enable);
-    void enableTcpClient(bool enable);
-    void enableTcpServer(bool enable);
-    // void enableUdp(bool enable);
-
-    // MAVLink data handling
-    void sendMessage(mavlink_message_t *msg);
-    // Forwarding across duck and MAVLINK
-    void sendDuckMessage(mavlink_message_t *msg);
+    // Data Handling (Sending/Forwarding)
+    void sendMessage(const mavlink_message_t *msg, MavlinkInterface excludeInterface = MavlinkInterface::NONE);
+    void sendDuckMessage(const mavlink_message_t *msg, MavlinkInterface excludeInterface = MavlinkInterface::NONE);
 
 private:
-    // Configuration flags
-
-    // Serial
-    bool _serialEnabled;
-    HardwareSerial *_serialPort;
-    void readSerial();
+    // Low-level sending methods
     void sendSerial(const uint8_t *buffer, size_t len);
-
-    // TCP
-    bool _tcpClientEnabled;
-    AsyncClient *_tcpClient;
-    IPAddress _tcpHost;
-    int _tcpClientPort;
-    void connectToTCPClient();
-    void readTcpClient();
     void sendTcpClient(const uint8_t *buffer, size_t len);
-
-    bool _tcpServerEnabled;
-    AsyncServer *_tcpServer;
-    std::vector<AsyncClient *> _serverClients;
-    int _tcpServerPort;
-    void connectToTCPServer();
-    void handleNewClient(AsyncClient *client);
     void sendToAllTcpClients(const uint8_t *buffer, size_t len);
 
-    // // UDP
-    // AsyncUDP _udpSocket;
-    // IPAddress _udpRemoteHost;
-    // int _udpLocalPort;
-    // int _udpRemotePort;
-    // bool _udpEnabled;
-    // void readUdp();
-    // void sendUdp(const uint8_t *buffer, size_t len);
+    // Connection management
+    void connectToTCPClient();
+    void handleNewClient(AsyncClient *client);
+    void cleanupClient(AsyncClient *client);
 
-    // MAVLink parser state
-    mavlink_status_t _mavlinkStatus;
-    mavlink_message_t _receivedMessage;
+    // MAVLink parsing task functions (must be static for xTaskCreate)
+    static void mavlinkSerialParseTask(void *pvParameters);
+    static void mavlinkTcpClientParseTask(void *pvParameters);
+    static void mavlinkTcpServerClientParseTask(void *pvParameters);
 
-    // Private helper functions
+    // --- Member Variables ---
+
+    // Serial Interface
+    bool _serialEnabled = false;
+    HardwareSerial *_serialPort = nullptr;
+    TaskHandle_t _serialTaskHandle = NULL;
+
+    // TCP Client Interface
+    bool _tcpClientEnabled = false;
+    AsyncClient *_tcpClient = nullptr;
+    IPAddress _tcpHost;
+    int _tcpClientPort;
+    RingbufHandle_t _tcpClientRxBuffer = NULL;
+    TaskHandle_t _tcpClientTaskHandle = NULL;
+
+    // TCP Server Interface
+    bool _tcpServerEnabled = false;
+    AsyncServer *_tcpServer = nullptr;
+    int _tcpServerPort;
+    // Map to hold context for each server client (client pointer -> context)
+    std::map<AsyncClient *, ServerClientContext *> _serverClients;
+
+    // Mutex for thread-safe access to the _serverClients map
+    SemaphoreHandle_t _serverClientsMutex;
 };
 
-#endif
+#endif // DUCKMAV_H
