@@ -5,10 +5,10 @@
 extern void splitAndSendMavlinkMessage(const mavlink_message_t &msg);
 
 // --- Constants ---
-#define RING_BUFFER_SIZE 4096      // Bytes for each RX ring buffer. Increase if you see drops.
+#define RING_BUFFER_SIZE 8192      // Bytes for each RX ring buffer. Increase if you see drops.
 #define PARSE_TASK_STACK_SIZE 4096 // Stack size for parser tasks
-#define PARSE_TASK_PRIORITY 2      // FreeRTOS task priority (higher number = higher priority)
-#define PARSE_TASK_CORE 1          // Pin tasks to a specific core (0 or 1) to improve performance
+#define PARSE_TASK_PRIORITY 3      // FreeRTOS task priority (higher number = higher priority)
+#define PARSE_TASK_CORE 1          // Pin tasks to a specific core (0 or 1) to improve performance (core 0 is dedicated to running wifi and things of that nature)
 
 // Helper to print MAVLink messages for debugging (optional)
 void printMavlinkMessage(const mavlink_message_t &msg)
@@ -258,8 +258,10 @@ void MavlinkHandler::mavlinkSerialParseTask(void *pvParameters)
 
 void MavlinkHandler::mavlinkTcpClientParseTask(void *pvParameters)
 {
-    Serial.printf("beginMavlinkTasks() running on core ");
+    Serial.printf("mavlinkTcpClientParseTask() running on core ");
     Serial.println(xPortGetCoreID());
+    Serial.printf("max freeRTOS tasks: ");
+    Serial.println((configMAX_PRIORITIES - 1));
     auto *handler = static_cast<MavlinkHandler *>(pvParameters);
     mavlink_status_t status = {};
     mavlink_message_t msg = {};
@@ -357,15 +359,12 @@ void MavlinkHandler::sendSerial(const uint8_t *buffer, size_t len)
 
 void MavlinkHandler::sendTcpClient(const uint8_t *buffer, size_t len)
 {
-    // Use add() for robust backpressure handling. Check space first.
-    if (_tcpClient->space() > len)
+    // tries not to block when buffer is full
+    while (_tcpClient->space() < len)
     {
-        _tcpClient->add((const char *)buffer, len, ASYNC_WRITE_FLAG_COPY);
+        vTaskDelay(pdMS_TO_TICKS(5)); // Wait 5ms
     }
-    else
-    {
-        Serial.println("[WARN] TCP client TX buffer full, dropping packet.");
-    }
+    _tcpClient->add((const char *)buffer, len, ASYNC_WRITE_FLAG_COPY);
 }
 
 void MavlinkHandler::sendToAllTcpClients(const uint8_t *buffer, size_t len)
@@ -376,14 +375,12 @@ void MavlinkHandler::sendToAllTcpClients(const uint8_t *buffer, size_t len)
         {
             if (client && client->connected())
             {
-                if (client->space() > len)
+                // tries not to block when buffer is full
+                while (client->space() < len)
                 {
-                    client->add((const char *)buffer, len, ASYNC_WRITE_FLAG_COPY);
+                    vTaskDelay(pdMS_TO_TICKS(5)); // Wait 5ms
                 }
-                else
-                {
-                    Serial.printf("[WARN] TCP server client %s TX buffer full, dropping packet.\n", client->remoteIP().toString().c_str());
-                }
+                client->add((const char *)buffer, len, ASYNC_WRITE_FLAG_COPY);
             }
         }
         xSemaphoreGive(_serverClientsMutex);
