@@ -17,6 +17,7 @@
 #include "DuckDetect.h"
 #include "DuckLink.h"
 #include "MamaDuck.h"
+#include "MavMamaDuck.h"
 #include "PapaDuck.h"
 #include "MemoryFree.h"
 #include "CdpPacket.h"

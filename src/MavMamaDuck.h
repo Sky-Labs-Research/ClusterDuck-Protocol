@@ -1,5 +1,5 @@
-#ifndef MAMADUCK_H
-#define MAMADUCK_H
+#ifndef MAVMAMADUCK_H
+#define MAVMAMADUCK_H
 
 #include <Arduino.h>
 #include "include/Duck.h"

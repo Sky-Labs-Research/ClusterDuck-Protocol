@@ -34,7 +34,7 @@ void splitAndSendMavlinkMessage(const mavlink_message_t &msg);
 void drainLoRaQueueFromLoop();
 
 // --- Global Variables ---
-MamaDuck duck;                       // CDP MamaDuck instance
+MavMamaDuck duck;                    // CDP MamaDuck instance
 auto timer = timer_create_default(); // Creating a timer with default settings
 const int INTERVAL_MS = 10000;       // Interval in milliseconds between runSensor call
 int counter = 1;                     // Counter for the sensor data
@@ -68,11 +68,11 @@ void setup()
   // TODO: Implement serial / tcp / udp mavlink connection
 
   // Example 1: Serial link to a flight controller on Serial2.
-  // mavlinkHandler.beginSerial(&Serial2, 57600);
+  mavlinkHandler.beginSerial(&Serial2, 57600);
 
-  // Example 2: TCP client connecting to a GCS like MAVProxy.
+  // Example 2: TCP client connecting to a flight controller TCP server.
   // This connects to the first device (e.g., a laptop) that joins the Duck's access point.
-  mavlinkHandler.beginTcpClient(IPAddress(CDPCFG_AP_IP1, CDPCFG_AP_IP2, CDPCFG_AP_IP3, CDPCFG_AP_IP4 + 1).toString().c_str(), 5760);
+  // mavlinkHandler.beginTcpClient(IPAddress(CDPCFG_AP_IP1, CDPCFG_AP_IP2, CDPCFG_AP_IP3, CDPCFG_AP_IP4 + 1).toString().c_str(), 5760);
 
   // Example 3: TCP server for a GCS to connect to this Duck.
   // QGroundControl or MAVProxy can connect to this port.

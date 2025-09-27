@@ -11,9 +11,10 @@ extern void splitAndSendMavlinkMessage(const mavlink_message_t &msg);
 #define PARSE_TASK_CORE 1          // Pin tasks to a specific core (0 or 1) to improve performance (core 0 is dedicated to running wifi and things of that nature)
 
 // Helper to print MAVLink messages for debugging (optional)
-void printMavlinkMessage(const mavlink_message_t &msg)
+void printMavlinkMessage(const mavlink_message_t *msg_ptr)
 {
-    // This is useful for debugging but can be commented out to save CPU cycles
+    // // This is useful for debugging but can be commented out to save CPU cycles
+    // __mavlink_message msg = *msg_ptr;
     // switch (msg.msgid)
     // {
     // case MAVLINK_MSG_ID_HEARTBEAT:
@@ -245,7 +246,6 @@ void MavlinkHandler::mavlinkSerialParseTask(void *pvParameters)
             if (mavlink_parse_char(MAVLINK_COMM_0, c, &msg, &status))
             {
                 // Serial.printf("[Serial] MAVLink msg ID: %u\n", msg.msgid);
-                printMavlinkMessage(msg);
                 handler->sendDuckMessage(&msg, MavlinkInterface::MAVSERIAL);
             }
         }
@@ -277,7 +277,6 @@ void MavlinkHandler::mavlinkTcpClientParseTask(void *pvParameters)
                 if (mavlink_parse_char(MAVLINK_COMM_1, item[i], &msg, &status))
                 {
                     // Serial.printf("[TCP Client] MAVLink msg ID: %u\n", msg.msgid);
-                    printMavlinkMessage(msg);
                     handler->sendDuckMessage(&msg, MavlinkInterface::TCP_CLIENT);
                 }
             }
@@ -305,7 +304,6 @@ void MavlinkHandler::mavlinkTcpServerClientParseTask(void *pvParameters)
                 if (mavlink_parse_char(MAVLINK_COMM_2, item[i], &msg, &status))
                 {
                     // Serial.printf("[TCP Srv %s] MAVLink msg ID: %u\n", context->client->remoteIP().toString().c_str(), msg.msgid);
-                    printMavlinkMessage(msg);
                     handler->sendDuckMessage(&msg, MavlinkInterface::TCP_SERVER);
                 }
             }
@@ -323,6 +321,7 @@ void MavlinkHandler::mavlinkTcpServerClientParseTask(void *pvParameters)
 
 void MavlinkHandler::sendMessage(const mavlink_message_t *msg, MavlinkInterface excludeInterface)
 {
+    printMavlinkMessage(msg);
     uint8_t buffer[MAVLINK_MAX_PACKET_LEN];
     uint16_t len = mavlink_msg_to_send_buffer(buffer, msg);
 
@@ -346,10 +345,10 @@ void MavlinkHandler::sendDuckMessage(const mavlink_message_t *msg, MavlinkInterf
     sendMessage(msg, excludeInterface);
 
     // Forward to LoRa (Duck) interface
-    // if (excludeInterface != MavlinkInterface::LORA)
-    // {
-    //     splitAndSendMavlinkMessage(*msg);
-    // }
+    if (excludeInterface != MavlinkInterface::LORA)
+    {
+        splitAndSendMavlinkMessage(*msg);
+    }
 }
 
 void MavlinkHandler::sendSerial(const uint8_t *buffer, size_t len)
