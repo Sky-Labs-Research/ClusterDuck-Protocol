@@ -376,7 +376,7 @@ void MavMamaDuck::handleMavlinkPacket(const CdpPacket &packet)
     // Safety check: ensure packet is large enough for the header
     if (packet.data.size() < MAVLINK_FRAGMENT_HEADER_SIZE)
     {
-        Serial.println("Error: Received packet is too small for MAVLink fragment header.");
+        logmav_ln("Error: Received packet is too small for MAVLink fragment header.");
         return;
     }
 
@@ -387,7 +387,7 @@ void MavMamaDuck::handleMavlinkPacket(const CdpPacket &packet)
     size_t expected_size = MAVLINK_FRAGMENT_HEADER_SIZE + fragment_packet->payload_length;
     if (packet.data.size() < expected_size)
     {
-        Serial.println("Error: Received packet size is smaller than indicated by its MAVLink fragment header.");
+        logmav_ln("Error: Received packet size is smaller than indicated by its MAVLink fragment header.");
         return;
     }
 

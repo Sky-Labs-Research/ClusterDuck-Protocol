@@ -3,18 +3,21 @@
 
 #ifndef CDP_NO_LOG
 #include "Arduino.h"
-#define CDP_DEBUG
 #endif
 
 
-#define CDP_DEBUG
-
+//#define CDP_DEBUG
+#define CDP_MAV
 
 #ifdef CDP_DEBUG
 #define CDP_LOG_ERROR
 #define CDP_LOG_INFO
 #define CDP_LOG_DEBUG
 #define CDP_LOG_WARN
+#endif
+
+#ifdef CDP_MAV
+#define CDP_MAV_LOG_MSG_LOG
 #endif
 
 #ifndef __FILENAME__
@@ -138,4 +141,24 @@ static size_t cdpPrintf(const char *format, ...) {
 #define logdbg_ln(format, ...)                                  \
   {}
 #endif
+#if defined(CDP_MAV_LOG_MSG_LOG)
+#define logmav(format, ...)                                    \
+  do {                                                          \
+    cdpPrintf("[M]");                                           \
+    cdpPrintf("[%s] ",__FILENAME__);                            \
+    cdpPrintf(format, ##__VA_ARGS__);                           \
+  } while (0)
+
+#define logmav_ln(format, ...)                                 \
+  do {                                                          \
+    cdpPrintf("[M]");                                           \
+    cdpPrintf("[%s] ",__FILENAME__);                            \
+    cdpPrintf(format, ##__VA_ARGS__);cdpPrintf("\n");           \
+  } while (0)
+#else
+#define logmav(format, ...)                                    \
+  {}                                                                            
+#define logmav_ln(format, ...)                                 \
+  {}
+#endif // CDP_MAV_LOG_MSG_LOG
 #endif

@@ -217,11 +217,11 @@ void drainLoRaQueueFromLoop()
 
     if (sendData(packet_as_string, topics::mavlink))
     {
-      Serial.printf("Sent fragment %u/%u (msgid=%u)\n", packetPtr->fragment_sequence + 1, packetPtr->total_fragments, packetPtr->message_id);
+      logmav("Sent fragment %u/%u (length=%u, msgid=%u)\n", packetPtr->fragment_sequence + 1, packetPtr->total_fragments, packetPtr->payload_length, packetPtr->message_id);
     }
     else
     {
-      Serial.printf("Failed to send fragment %u/%u (msgid=%u)\n", packetPtr->fragment_sequence + 1, packetPtr->total_fragments, packetPtr->message_id);
+      logmav("Failed to send fragment %u/%u (length=%u, msgid=%u)\n", packetPtr->fragment_sequence + 1, packetPtr->total_fragments, packetPtr->payload_length, packetPtr->message_id);
     }
 
     free(packetPtr);
