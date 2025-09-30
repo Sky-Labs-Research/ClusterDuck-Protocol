@@ -4,7 +4,7 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <AsyncTCP.h>
-// #include <ESPAsyncUDP.h>
+#include <AsyncUDP.h>
 #include <common/mavlink.h>
 #include <vector>
 #include <map>
@@ -24,6 +24,14 @@ struct ServerClientContext
     bool active;             // Flag to signal task termination
 };
 
+// Structure to hold context for each UDP "client"
+struct UdpClientContext
+{
+    IPAddress ip;
+    uint16_t port;
+    uint64_t lastHeard; // Timestamp for tracking activity and timing out old clients
+};
+
 // Enum to identify MAVLink interfaces for forwarding logic
 enum class MavlinkInterface
 {
@@ -31,6 +39,7 @@ enum class MavlinkInterface
     MAVSERIAL,
     TCP_CLIENT,
     TCP_SERVER,
+    UDP_SERVER,
     LORA
 };
 
@@ -44,6 +53,7 @@ public:
     void beginSerial(HardwareSerial *serial, long baudRate);
     void beginTcpClient(const char *host, int port);
     void beginTcpServer(int port);
+    void beginUdpServer(int port);
     void beginMavlinkTasks(); // Starts the background parsing tasks
 
     // Data Handling (Sending/Forwarding)
@@ -55,16 +65,19 @@ private:
     void sendSerial(const uint8_t *buffer, size_t len);
     void sendTcpClient(const uint8_t *buffer, size_t len);
     void sendToAllTcpClients(const uint8_t *buffer, size_t len);
+    void sendToAllUdpClients(const uint8_t *buffer, size_t len);
 
     // Connection management
     void connectToTCPClient();
     void handleNewClient(AsyncClient *client);
     void cleanupClient(AsyncClient *client);
+    void cleanupUdpClients();
 
     // MAVLink parsing task functions (must be static for xTaskCreate)
     static void mavlinkSerialParseTask(void *pvParameters);
     static void mavlinkTcpClientParseTask(void *pvParameters);
     static void mavlinkTcpServerClientParseTask(void *pvParameters);
+    static void mavlinkUdpParseTask(void *pvParameters);
 
     // --- Member Variables ---
 
@@ -88,8 +101,18 @@ private:
     // Map to hold context for each server client (client pointer -> context)
     std::map<AsyncClient *, ServerClientContext *> _serverClients;
 
-    // Mutex for thread-safe access to the _serverClients map
+    // UDP Server Interface
+    bool _udpServerEnabled = false;
+    AsyncUDP _udp;
+    int _udpServerPort;
+    // Map to hold context for each UDP client (IP:Port string -> context)
+    std::map<String, UdpClientContext *> _udpClients;
+    RingbufHandle_t _udpRxBuffer = NULL;
+    TaskHandle_t _udpTaskHandle = NULL;
+
+    // Mutexes for thread-safe access to client maps
     SemaphoreHandle_t _serverClientsMutex;
+    SemaphoreHandle_t _udpClientsMutex;
 };
 
 #endif // DUCKMAV_H

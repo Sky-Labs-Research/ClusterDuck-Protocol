@@ -5,10 +5,11 @@
 extern void splitAndSendMavlinkMessage(const mavlink_message_t &msg);
 
 // --- Constants ---
-#define RING_BUFFER_SIZE 8192      // Bytes for each RX ring buffer. Increase if you see drops.
-#define PARSE_TASK_STACK_SIZE 4096 // Stack size for parser tasks
-#define PARSE_TASK_PRIORITY 3      // FreeRTOS task priority (higher number = higher priority)
-#define PARSE_TASK_CORE 1          // Pin tasks to a specific core (0 or 1) to improve performance (core 0 is dedicated to running wifi and things of that nature)
+#define RING_BUFFER_SIZE 8192                // Bytes for each RX ring buffer. Increase if you see drops.
+#define PARSE_TASK_STACK_SIZE 4096           // Stack size for parser tasks
+#define PARSE_TASK_PRIORITY 3                // FreeRTOS task priority (higher number = higher priority)
+#define PARSE_TASK_CORE 1                    // Pin tasks to a specific core (0 or 1) to improve performance (core 0 is dedicated to running wifi and things of that nature)
+#define UDP_CLIENT_TIMEOUT_US (30 * 1000000) // 30 seconds in microseconds for UDP client timeout
 
 // Helper to print MAVLink messages for debugging (optional)
 void printMavlinkMessage(const mavlink_message_t *msg_ptr)
@@ -29,6 +30,7 @@ void printMavlinkMessage(const mavlink_message_t *msg_ptr)
 MavlinkHandler::MavlinkHandler()
 {
     _serverClientsMutex = xSemaphoreCreateMutex();
+    _udpClientsMutex = xSemaphoreCreateMutex();
 }
 
 MavlinkHandler::~MavlinkHandler()
@@ -38,7 +40,10 @@ MavlinkHandler::~MavlinkHandler()
         vTaskDelete(_serialTaskHandle);
     if (_tcpClientTaskHandle)
         vTaskDelete(_tcpClientTaskHandle);
+    if (_udpTaskHandle)
+        vTaskDelete(_udpTaskHandle);
 
+    // TCP Server clients
     xSemaphoreTake(_serverClientsMutex, portMAX_DELAY);
     for (auto const &[client, context] : _serverClients)
     {
@@ -46,14 +51,26 @@ MavlinkHandler::~MavlinkHandler()
     }
     _serverClients.clear();
     xSemaphoreGive(_serverClientsMutex);
-
     vSemaphoreDelete(_serverClientsMutex);
+
+    // UDP clients
+    xSemaphoreTake(_udpClientsMutex, portMAX_DELAY);
+    for (auto const &[key, context] : _udpClients)
+    {
+        delete context;
+    }
+    _udpClients.clear();
+    xSemaphoreGive(_udpClientsMutex);
+    vSemaphoreDelete(_udpClientsMutex);
 
     if (_tcpClientRxBuffer)
         vRingbufferDelete(_tcpClientRxBuffer);
+    if (_udpRxBuffer)
+        vRingbufferDelete(_udpRxBuffer);
 
     delete _tcpClient;
     delete _tcpServer;
+    _udp.close();
 }
 
 // --- Initialization ---
@@ -154,6 +171,52 @@ void MavlinkHandler::beginTcpServer(int port)
     Serial.printf("TCP MAVLink Server started on port %d\n", _tcpServerPort);
 }
 
+void MavlinkHandler::beginUdpServer(int port)
+{
+    _udpServerPort = port;
+    if (_udp.listen(_udpServerPort))
+    {
+        _udpServerEnabled = true;
+        _udpRxBuffer = xRingbufferCreate(RING_BUFFER_SIZE, RINGBUF_TYPE_BYTEBUF);
+        if (!_udpRxBuffer)
+        {
+            Serial.println("[ERROR] Failed to create UDP RX ring buffer!");
+            _udpServerEnabled = false;
+            return;
+        }
+
+        _udp.onPacket([this](AsyncUDPPacket &packet)
+                      {
+            String clientKey = packet.remoteIP().toString() + ":" + String(packet.remotePort());
+            if (xSemaphoreTake(_udpClientsMutex, portMAX_DELAY) == pdTRUE) {
+                auto it = _udpClients.find(clientKey);
+                if (it != _udpClients.end()) {
+                    // Client known, just update timestamp
+                    it->second->lastHeard = esp_timer_get_time();
+                } else {
+                    // New client
+                    Serial.printf("New UDP client connected from %s\n", clientKey.c_str());
+                    UdpClientContext* context = new UdpClientContext{
+                        .ip = packet.remoteIP(),
+                        .port = packet.remotePort(),
+                        .lastHeard = esp_timer_get_time()
+                    };
+                    _udpClients[clientKey] = context;
+                }
+                xSemaphoreGive(_udpClientsMutex);
+            }
+
+            if (xRingbufferSend(_udpRxBuffer, packet.data(), packet.length(), pdMS_TO_TICKS(10)) != pdTRUE) {
+                 Serial.println("[WARN] UDP RX buffer overflow!");
+            } });
+        Serial.printf("UDP MAVLink Server started on port %d\n", _udpServerPort);
+    }
+    else
+    {
+        Serial.printf("Failed to start UDP Server on port %d\n", _udpServerPort);
+    }
+}
+
 void MavlinkHandler::beginMavlinkTasks()
 {
     if (_serialEnabled)
@@ -164,9 +227,13 @@ void MavlinkHandler::beginMavlinkTasks()
     {
         xTaskCreatePinnedToCore(mavlinkTcpClientParseTask, "MavlinkTcpClientTask", PARSE_TASK_STACK_SIZE, this, PARSE_TASK_PRIORITY, &_tcpClientTaskHandle, PARSE_TASK_CORE);
     }
+    if (_udpServerEnabled)
+    {
+        xTaskCreatePinnedToCore(mavlinkUdpParseTask, "MavlinkUdpTask", PARSE_TASK_STACK_SIZE, this, PARSE_TASK_PRIORITY, &_udpTaskHandle, PARSE_TASK_CORE);
+    }
 }
 
-// --- Client Management for TCP Server ---
+// --- Client Management ---
 
 void MavlinkHandler::handleNewClient(AsyncClient *client)
 {
@@ -227,6 +294,28 @@ void MavlinkHandler::cleanupClient(AsyncClient *client)
             // The task is now responsible for cleaning up its own resources.
         }
         xSemaphoreGive(_serverClientsMutex);
+    }
+}
+
+void MavlinkHandler::cleanupUdpClients()
+{
+    if (xSemaphoreTake(_udpClientsMutex, portMAX_DELAY) == pdTRUE)
+    {
+        uint64_t now = esp_timer_get_time();
+        for (auto it = _udpClients.begin(); it != _udpClients.end();)
+        {
+            if ((now - it->second->lastHeard) > UDP_CLIENT_TIMEOUT_US)
+            {
+                Serial.printf("UDP client %s timed out. Removing.\n", it->first.c_str());
+                delete it->second;          // Free the context memory
+                it = _udpClients.erase(it); // Erase and move to the next valid iterator
+            }
+            else
+            {
+                ++it;
+            }
+        }
+        xSemaphoreGive(_udpClientsMutex);
     }
 }
 
@@ -317,6 +406,39 @@ void MavlinkHandler::mavlinkTcpServerClientParseTask(void *pvParameters)
     vTaskDelete(NULL); // Task deletes itself
 }
 
+void MavlinkHandler::mavlinkUdpParseTask(void *pvParameters)
+{
+    auto *handler = static_cast<MavlinkHandler *>(pvParameters);
+    mavlink_status_t status = {};
+    mavlink_message_t msg = {};
+    size_t item_size;
+    uint32_t cleanup_timer = 0;
+
+    while (true)
+    {
+        uint8_t *item = (uint8_t *)xRingbufferReceive(handler->_udpRxBuffer, &item_size, pdMS_TO_TICKS(1000));
+        if (item)
+        {
+            for (size_t i = 0; i < item_size; ++i)
+            {
+                if (mavlink_parse_char(MAVLINK_COMM_3, item[i], &msg, &status))
+                {
+                    // Serial.printf("[UDP] MAVLink msg ID: %u\n", msg.msgid);
+                    handler->sendDuckMessage(&msg, MavlinkInterface::UDP_SERVER);
+                }
+            }
+            vRingbufferReturnItem(handler->_udpRxBuffer, (void *)item);
+        }
+
+        // Periodically run the cleanup function every 10 seconds
+        if (millis() - cleanup_timer > 10000)
+        {
+            handler->cleanupUdpClients();
+            cleanup_timer = millis();
+        }
+    }
+}
+
 // --- Data Forwarding Logic ---
 
 void MavlinkHandler::sendMessage(const mavlink_message_t *msg, MavlinkInterface excludeInterface)
@@ -336,6 +458,10 @@ void MavlinkHandler::sendMessage(const mavlink_message_t *msg, MavlinkInterface 
     if (_tcpServerEnabled && excludeInterface != MavlinkInterface::TCP_SERVER)
     {
         sendToAllTcpClients(buffer, len);
+    }
+    if (_udpServerEnabled && excludeInterface != MavlinkInterface::UDP_SERVER)
+    {
+        sendToAllUdpClients(buffer, len);
     }
 }
 
@@ -383,5 +509,17 @@ void MavlinkHandler::sendToAllTcpClients(const uint8_t *buffer, size_t len)
             }
         }
         xSemaphoreGive(_serverClientsMutex);
+    }
+}
+
+void MavlinkHandler::sendToAllUdpClients(const uint8_t *buffer, size_t len)
+{
+    if (xSemaphoreTake(_udpClientsMutex, portMAX_DELAY) == pdTRUE)
+    {
+        for (auto const &[key, context] : _udpClients)
+        {
+            _udp.writeTo(buffer, len, context->ip, context->port);
+        }
+        xSemaphoreGive(_udpClientsMutex);
     }
 }

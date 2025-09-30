@@ -76,7 +76,11 @@ void setup()
 
   // Example 3: TCP server for a GCS to connect to this Duck.
   // QGroundControl or MAVProxy can connect to this port.
-  mavlinkHandler.beginTcpServer(5761);
+  // mavlinkHandler.beginTcpServer(5761);
+
+  // Example 3: UDP server for a GCS to connect to this Duck.
+  // QGroundControl or MAVProxy can connect to this port.
+  mavlinkHandler.beginUdpServer(14500);
 
   // After configuring interfaces, start the dedicated background parsing tasks.
   // This moves all high-frequency MAVLink processing off the main loop().
