@@ -10,6 +10,7 @@
 #include <map>
 #include "freertos/ringbuf.h" // For efficient, thread-safe ring buffers
 #include "freertos/semphr.h"  // For mutexes
+#include "DuckLogger.h"
 
 // Forward declaration
 class MavlinkHandler;

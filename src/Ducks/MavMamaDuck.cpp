@@ -311,7 +311,7 @@ void MavMamaDuck::processIncomingFragment(const MavlinkFragmentPacket *incoming_
         new_buffer.fragments.resize(new_buffer.total_fragments);
         reassembly_map[msg_id] = new_buffer;
         new_buffer.last_update_time = millis();
-        Serial.println("New message started (ID: " + String(msg_id) + "), expecting " + String(new_buffer.total_fragments) + " fragments.");
+        logmav("New message started (ID: %u), expecting %u  fragments.", msg_id, new_buffer.total_fragments);
     }
 
     ReassemblyBuffer &buffer = reassembly_map[msg_id];
@@ -323,7 +323,7 @@ void MavMamaDuck::processIncomingFragment(const MavlinkFragmentPacket *incoming_
         buffer.fragments_received_count++;
         buffer.fragments[seq].assign(incoming_packet->data, incoming_packet->data + incoming_packet->payload_length);
         buffer.last_update_time = millis();
-        Serial.println("Received fragment " + String(seq + 1) + "/" + String(buffer.total_fragments) + " for message ID " + String(msg_id));
+        logmav("Received fragment %u/%u  for message ID %u", seq + 1, buffer.total_fragments, msg_id);
     }
     else
     {
@@ -334,7 +334,7 @@ void MavMamaDuck::processIncomingFragment(const MavlinkFragmentPacket *incoming_
     // Check if the message is complete
     if (buffer.fragments_received_count == buffer.total_fragments)
     {
-        Serial.println("Message " + String(msg_id) + " is complete! Rebuilding...");
+        logmav("Message %u  is complete! Rebuilding...", msg_id);
 
         // Concatenate all fragments into a single buffer
         std::vector<uint8_t> full_message_buffer;
@@ -351,7 +351,7 @@ void MavMamaDuck::processIncomingFragment(const MavlinkFragmentPacket *incoming_
             if (mavlink_parse_char(MAVLINK_COMM_0, byte, &reassembled_msg, &status))
             {
                 // Successfully parsed a message!
-                Serial.println("Successfully reassembled MAVLink message! ID: " + String(reassembled_msg.msgid));
+                logmav("Successfully reassembled MAVLink message! ID: %u", reassembled_msg.msgid);
 
                 // --- DO SOMETHING WITH THE reassembled_msg ---
                 // For example, print its ID

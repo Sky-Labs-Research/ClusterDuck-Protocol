@@ -81,7 +81,7 @@ void MavlinkHandler::beginSerial(HardwareSerial *serial, long baudRate)
     _serialPort = serial;
     _serialPort->begin(baudRate, SERIAL_8N1, CDPCFG_MAV_RX, CDPCFG_MAV_TX);
     _serialEnabled = true;
-    Serial.println("Serial MAVLink initialized.");
+    logmav_ln("Serial MAVLink initialized.");
 #endif
 }
 
@@ -95,7 +95,7 @@ void MavlinkHandler::beginTcpClient(const char *host, int port)
     _tcpClientRxBuffer = xRingbufferCreate(RING_BUFFER_SIZE, RINGBUF_TYPE_BYTEBUF);
     if (!_tcpClientRxBuffer)
     {
-        Serial.println("[ERROR] Failed to create TCP client RX ring buffer!");
+        logmav_ln("[ERROR] Failed to create TCP client RX ring buffer!");
         return;
     }
 
@@ -104,40 +104,40 @@ void MavlinkHandler::beginTcpClient(const char *host, int port)
         // Send data to the ring buffer. A small timeout allows for brief contention.
         // If the buffer is full (parser task is stalled), data will be dropped.
         if (xRingbufferSend(_tcpClientRxBuffer, data, len, pdMS_TO_TICKS(10)) != pdTRUE) {
-            Serial.println("[WARN] TCP client RX buffer overflow!");
+            logmav_ln("[WARN] TCP client RX buffer overflow!");
         } });
 
     _tcpClient->onConnect([this](void *arg, AsyncClient *client)
-                          { Serial.println("TCP MAVLink client connected!"); });
+                          { logmav_ln("TCP MAVLink client connected!"); });
 
     _tcpClient->onDisconnect([this](void *arg, AsyncClient *client)
                              {
-        Serial.println("TCP MAVLink client disconnected. Reconnecting in 2s...");
+        logmav_ln("TCP MAVLink client disconnected. Reconnecting in 2s...");
         // A simple timed reconnect to avoid spamming connection attempts
         vTaskDelay(pdMS_TO_TICKS(2000));
         connectToTCPClient(); });
     _tcpClient->onTimeout([this](void *arg, AsyncClient *client, uint32_t time)
                           {
-          Serial.println("TCP MAVLink client timed out. Reconnecting in 2s...");
+          logmav_ln("TCP MAVLink client timed out. Reconnecting in 2s...");
           // A simple timed reconnect to avoid spamming connection attempts
           vTaskDelay(pdMS_TO_TICKS(2000));
           connectToTCPClient(); });
     connectToTCPClient();
     _tcpClientEnabled = true;
-    Serial.printf("TCP MAVLink client initialized. Connecting to %s:%d\n", _tcpHost.toString().c_str(), _tcpClientPort);
+    logmav_ln("TCP MAVLink client initialized. Connecting to %s:%d\n", _tcpHost.toString().c_str(), _tcpClientPort);
 }
 
 void MavlinkHandler::connectToTCPClient()
 {
     if (_tcpClientEnabled && !_tcpClient->connected() && !_tcpClient->connecting())
     {
-        Serial.println("Attempting TCP client connection...");
+        logmav_ln("Attempting TCP client connection...");
         _tcpClient->connect(_tcpHost, _tcpClientPort);
     }
     else
     {
         vTaskDelay(pdMS_TO_TICKS(2000));
-        Serial.println("Attempting TCP client connection... after 2 sec delay");
+        logmav_ln("Attempting TCP client connection... after 2 sec delay");
         _tcpClient->connect(_tcpHost, _tcpClientPort);
         // connectToTCPClient();
     }
@@ -148,11 +148,11 @@ void MavlinkHandler::connectToTCPClient()
 //     result = _tcpClientEnabled && (_tcpClient->connected() || _tcpClient->connecting() || _tcpClient->disconnecting());
 //     if (result)
 //     {
-//         Serial.println("[MAMA] Already Connecting or Disconnecting to TCP Mavlink.");
+//         logmav_ln("[MAMA] Already Connecting or Disconnecting to TCP Mavlink.");
 //     }
 //     else
 //     {
-//         Serial.println("[MAMA] Retrying connection to TCP Mavlink.");
+//         logmav_ln("[MAMA] Retrying connection to TCP Mavlink.");
 //         _tcpClient->connect(_tcpHost, _tcpClientPort);
 //     }
 //     // return result;
@@ -168,7 +168,7 @@ void MavlinkHandler::beginTcpServer(int port)
 
     _tcpServer->begin();
     _tcpServerEnabled = true;
-    Serial.printf("TCP MAVLink Server started on port %d\n", _tcpServerPort);
+    logmav_ln("TCP MAVLink Server started on port %d\n", _tcpServerPort);
 }
 
 void MavlinkHandler::beginUdpServer(int port)
@@ -180,7 +180,7 @@ void MavlinkHandler::beginUdpServer(int port)
         _udpRxBuffer = xRingbufferCreate(RING_BUFFER_SIZE, RINGBUF_TYPE_BYTEBUF);
         if (!_udpRxBuffer)
         {
-            Serial.println("[ERROR] Failed to create UDP RX ring buffer!");
+            logmav_ln("[ERROR] Failed to create UDP RX ring buffer!");
             _udpServerEnabled = false;
             return;
         }
@@ -195,7 +195,7 @@ void MavlinkHandler::beginUdpServer(int port)
                     it->second->lastHeard = esp_timer_get_time();
                 } else {
                     // New client
-                    Serial.printf("New UDP client connected from %s\n", clientKey.c_str());
+                    logmav_ln("New UDP client connected from %s\n", clientKey.c_str());
                     UdpClientContext* context = new UdpClientContext{
                         .ip = packet.remoteIP(),
                         .port = packet.remotePort(),
@@ -207,13 +207,13 @@ void MavlinkHandler::beginUdpServer(int port)
             }
 
             if (xRingbufferSend(_udpRxBuffer, packet.data(), packet.length(), pdMS_TO_TICKS(10)) != pdTRUE) {
-                 Serial.println("[WARN] UDP RX buffer overflow!");
+                 logmav_ln("[WARN] UDP RX buffer overflow!");
             } });
-        Serial.printf("UDP MAVLink Server started on port %d\n", _udpServerPort);
+        logmav_ln("UDP MAVLink Server started on port %d\n", _udpServerPort);
     }
     else
     {
-        Serial.printf("Failed to start UDP Server on port %d\n", _udpServerPort);
+        logmav_ln("Failed to start UDP Server on port %d\n", _udpServerPort);
     }
 }
 
@@ -237,7 +237,7 @@ void MavlinkHandler::beginMavlinkTasks()
 
 void MavlinkHandler::handleNewClient(AsyncClient *client)
 {
-    Serial.printf("New TCP client connected from %s\n", client->remoteIP().toString().c_str());
+    logmav_ln("New TCP client connected from %s\n", client->remoteIP().toString().c_str());
 
     auto *context = new ServerClientContext{
         .client = client,
@@ -248,7 +248,7 @@ void MavlinkHandler::handleNewClient(AsyncClient *client)
 
     if (!context->rxBuffer)
     {
-        Serial.println("[ERROR] Failed to create ring buffer for server client. Disconnecting.");
+        logmav_ln("[ERROR] Failed to create ring buffer for server client. Disconnecting.");
         delete context;
         client->stop();
         return;
@@ -265,12 +265,12 @@ void MavlinkHandler::handleNewClient(AsyncClient *client)
     client->onData([this, context](void *arg, AsyncClient *c, void *data, size_t len)
                    {
         if (xRingbufferSend(context->rxBuffer, data, len, pdMS_TO_TICKS(10)) != pdTRUE) {
-            Serial.printf("[WARN] TCP server client %s RX buffer overflow!\n", c->remoteIP().toString().c_str());
+            logmav_ln("[WARN] TCP server client %s RX buffer overflow!\n", c->remoteIP().toString().c_str());
         } });
 
     auto onDisconnectOrError = [this](void *arg, AsyncClient *c)
     {
-        Serial.printf("TCP client %s disconnected/errored.\n", c->remoteIP().toString().c_str());
+        logmav_ln("TCP client %s disconnected/errored.\n", c->remoteIP().toString().c_str());
         cleanupClient(c);
     };
     client->onDisconnect(onDisconnectOrError);
@@ -306,7 +306,7 @@ void MavlinkHandler::cleanupUdpClients()
         {
             if ((now - it->second->lastHeard) > UDP_CLIENT_TIMEOUT_US)
             {
-                Serial.printf("UDP client %s timed out. Removing.\n", it->first.c_str());
+                logmav_ln("UDP client %s timed out. Removing.\n", it->first.c_str());
                 delete it->second;          // Free the context memory
                 it = _udpClients.erase(it); // Erase and move to the next valid iterator
             }
@@ -347,10 +347,8 @@ void MavlinkHandler::mavlinkSerialParseTask(void *pvParameters)
 
 void MavlinkHandler::mavlinkTcpClientParseTask(void *pvParameters)
 {
-    Serial.printf("mavlinkTcpClientParseTask() running on core ");
-    Serial.println(xPortGetCoreID());
-    Serial.printf("max freeRTOS tasks: ");
-    Serial.println((configMAX_PRIORITIES - 1));
+    logmav_ln("mavlinkTcpClientParseTask() running on core %u", xPortGetCoreID());
+    logmav_ln("max freeRTOS tasks: %u", configMAX_PRIORITIES - 1);
     auto *handler = static_cast<MavlinkHandler *>(pvParameters);
     mavlink_status_t status = {};
     mavlink_message_t msg = {};
@@ -423,7 +421,7 @@ void MavlinkHandler::mavlinkUdpParseTask(void *pvParameters)
             {
                 if (mavlink_parse_char(MAVLINK_COMM_3, item[i], &msg, &status))
                 {
-                    // Serial.printf("[UDP] MAVLink msg ID: %u\n", msg.msgid);
+                    // logmav_ln("[UDP] MAVLink msg ID: %u\n", msg.msgid);
                     handler->sendDuckMessage(&msg, MavlinkInterface::UDP_SERVER);
                 }
             }

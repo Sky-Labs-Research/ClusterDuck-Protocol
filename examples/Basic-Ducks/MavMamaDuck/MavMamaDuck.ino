@@ -138,7 +138,7 @@ bool sendData(std::string message, byte topic)
   int err = duck.sendData(topic, message);
   if (err != DUCK_ERR_NONE)
   {
-    Serial.printf("[Link] Failed to send data. error = %d\n", err);
+    logmav_ln("[Link] Failed to send data. error = %d\n", err);
     return false;
   }
   return true;
@@ -170,7 +170,7 @@ void splitAndSendMavlinkMessage(const mavlink_message_t &msg)
     MavlinkFragmentPacket *packetPtr = (MavlinkFragmentPacket *)malloc(sizeof(MavlinkFragmentPacket));
     if (!packetPtr)
     {
-      Serial.println("[LoRaTx] ERROR: malloc MavlinkFragmentPacket failed");
+      logmav_ln("[LoRaTx] ERROR: malloc MavlinkFragmentPacket failed");
       return; // Out of memory
     }
 
@@ -188,7 +188,7 @@ void splitAndSendMavlinkMessage(const mavlink_message_t &msg)
 
     if (xQueueSend(loraTxQueue, &packetPtr, pdMS_TO_TICKS(50)) != pdPASS)
     {
-      Serial.printf("[LoRaTx] Queue full, dropping fragment %u/%u (msgid=%u)\n",
+      logmav_ln("[LoRaTx] Queue full, dropping fragment %u/%u (msgid=%u)\n",
                     packetPtr->fragment_sequence + 1, packetPtr->total_fragments, packetPtr->message_id);
       free(packetPtr); // Free memory if queue is full
     }
@@ -221,7 +221,7 @@ void drainLoRaQueueFromLoop()
     }
     else
     {
-      logmav("Failed to send fragment %u/%u (length=%u, msgid=%u)\n", packetPtr->fragment_sequence + 1, packetPtr->total_fragments, packetPtr->payload_length, packetPtr->message_id);
+      logmav_ln("Failed to send fragment %u/%u (length=%u, msgid=%u)\n", packetPtr->fragment_sequence + 1, packetPtr->total_fragments, packetPtr->payload_length, packetPtr->message_id);
     }
 
     free(packetPtr);
